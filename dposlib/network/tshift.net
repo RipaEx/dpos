@@ -8,16 +8,16 @@
 	"marker": "S",
 
 	"headers": {
-		"Content-Type": "application/json; charset=utf-8",
-		"port": "9305"
+	"Content-Type": "application/json; charset=utf-8",
+	"port": "9305"
 	},
 
 	"seeds": [
-		"https://wallet.shiftnrg.org"
+	"https://wallet.testnet.shiftnrg.org"
 	],
 
-	"explorer": "https://explorer.shiftnrg.org",
-	"token": "shift",
+	"explorer": "https://explorer.testnet.shiftnrg.org",
+	"token": "tshift",
 	"symbol": "SHIFT",
 	"delegate": 101,
 	"blocktime": 10,

@@ -159,6 +159,20 @@ def getIdFromBytes(data):
 	return hexlify(hashlib.sha256(data).digest())
 
 
+def verifySignature(value, publicKey, signature):
+	"""
+	Verify signature.
+
+	Arguments:
+	value (bytes) -- value as hex string in bytes
+	publicKey (str) -- a public key as hex string
+	signature (str) -- a signature as hex string
+
+	Return bool
+	"""
+	return verifySignatureFromBytes(unhexlify(value), publicKey, signature)
+
+
 def verifySignatureFromBytes(data, publicKey, signature):
 	"""
 	Verify signature.
@@ -201,8 +215,10 @@ def getBytes(tx):
 	# if there is a recipientId
 	if tx.get("recipientId", False):
 		recipientId = tx["recipientId"]
-		recipientId = base58.b58decode_check(str(recipientId) if not isinstance(recipientId, bytes) \
-			else recipientId)
+		recipientId = base58.b58decode_check(
+			str(recipientId) if not isinstance(recipientId, bytes) else \
+			recipientId
+		)
 	else:
 		recipientId = b"\x00" * 21
 	pack_bytes(buf, recipientId)
@@ -213,7 +229,7 @@ def getBytes(tx):
 		vendorField = "\x00" * 64
 	pack_bytes(buf, vendorField.encode("utf-8"))
 	# write amount and fee value
-	pack("<QQ", buf, (int(tx["amount"]), int(tx["fee"])))
+	pack("<QQ", buf, (tx.get("amount", 0), tx["fee"]))
 	# if there is asset data
 	if tx.get("asset", False):
 		asset = tx["asset"]
@@ -224,8 +240,11 @@ def getBytes(tx):
 			pack_bytes(buf, asset["delegate"]["username"].encode("utf-8"))
 		elif typ == 3 and "votes" in asset:
 			pack_bytes(buf, "".join(asset["votes"]).encode("utf-8"))
-		else:
-			pass
+		elif typ == 4:
+			multisignature = asset.get("multisignature", {})
+			pack("<bb", buf, (multisignature["min"], multisignature["lifetime"]))
+			for publicKey in multisignature["keysgroup"]:
+				pack_bytes(buf, unhexlify(publicKey))
 	# if there is a signature
 	if tx.get("signature", False):
 		pack_bytes(buf, unhexlify(tx["signature"]))
