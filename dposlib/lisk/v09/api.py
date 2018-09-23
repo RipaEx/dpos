@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # © Toons
 
-# ~ https://docs.ark.io/api/public/v1/
+# ~ https://lisk.io/documentation/lisk-core/user-guide/api/0-9
 
 import dposlib
 
@@ -27,9 +27,9 @@ class Wallet(Data):
 			count = limit if count == tmpcount else tmpcount
 		return [filter_dic(dic) for dic in sorted(received+sent, key=lambda e:e.get("timestamp", None), reverse=True)[:limit]]
 
-	def send(self, amount, recipientId, vendorField=None, **kw):
+	def send(self, amount, recipientId, **kw):
 		# create a type-1-transaction
-		tx = Transaction(type=0, amount=amount*100000000, recipientId=recipientId, vendorField=vendorField, **kw)
+		tx = Transaction(type=0, amount=amount*100000000, recipientId=recipientId, **kw)
 		# sign if a public and private keys exists
 		try: tx.finalize()
 		# if no key: return orphan tx

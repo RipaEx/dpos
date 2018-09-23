@@ -15,7 +15,7 @@
 >>> from dposlib.blockchain import Transaction
 >>> tx = Transaction(
 ... amount=100000000,
-... recipientId="ARfDVWZ7Zwkox3ZXtMQQY1HYSANMB88vWE",
+... recipientId="DRgh1n8oyGHDE6xXVq4yhh3sSajAr7uHJY",
 ... secret="secret",
 ... secondSecret="secondSecret")
 >>> tx.finalize()
@@ -94,11 +94,14 @@
 ...
 ('AHMXV6UdkVxsTwMqeoeqdpotRRmGZZaAtj', 0.08403461)
 ('AUahWfkfr5J4tYakugRbfow7RWVTK35GPW', 329.32420472)
+>>> wlt.link("secret passphrase here")
+>>> wlt.send(1, "ARfDVWZ7Zwkox3ZXtMQQY1HYSANMB88vWE")
+{'transactionIds': ['bbce72e7a76f5f71209c8ab29b4b4299a409241dfc77835150459a34bd5a5c16'], 'success': True}
 ```
 
   - [x] Ark v1
-  - [ ] Ark v2
-  - [ ] Lisk v09
+  - [x] Ark v2
+  - [x] Lisk v09
   - [ ] Lisk v10
 
 ## Version
@@ -110,13 +113,13 @@
   - [x] ARK packaging improvement (`v1` and `v2`)
   - [x] LISK packaging improvement (`v09` and `v10`)
   - [x] ARK dynamicFee implementation
+  - [x] Network API created
   - [x] readonly wallet
-   
+
 TODO
-  - [ ] write `api` for each network package
+  - [ ] write `api` for lisk networks
   - [ ] integrate LedgerBlue Nano S use
+  - [ ] doc writing
   - [ ] unittest
   - [ ] wallet
   - [ ] CLI
-  - [ ] DOC
-  - [ ] API
