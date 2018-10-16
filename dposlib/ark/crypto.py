@@ -194,7 +194,7 @@ def verifySignatureFromBytes(data, publicKey, signature):
 	return True
 
 
-def getBytes(tx):
+def getBytes(tx, ark_v2=False):
 	"""
 	Hash transaction object into bytes data.
 
@@ -212,8 +212,8 @@ def getBytes(tx):
 	# if there is a requesterPublicKey
 	if "requesterPublicKey" in tx:
 		pack_bytes(buf, unhexlify(tx["requesterPublicKey"]))
-	# if there is a recipientId
-	if tx.get("recipientId", False):
+	# if there is a recipientId or tx not a second secret nor a multi singature registration
+	if tx.get("recipientId", False) and tx["type"] not in [1, 4]:
 		recipientId = tx["recipientId"]
 		recipientId = base58.b58decode_check(
 			str(recipientId) if not isinstance(recipientId, bytes) else \
@@ -232,8 +232,7 @@ def getBytes(tx):
 	pack("<QQ", buf, (tx.get("amount", 0), tx["fee"]))
 	# if there is asset data
 	if tx.get("asset", False):
-		asset = tx["asset"]
-		typ = tx["type"]
+		asset, typ = tx["asset"], tx["type"]
 		if typ == 1 and "signature" in asset:
 			pack_bytes(buf, unhexlify(asset["signature"]["publicKey"]))
 		elif typ == 2 and "delegate" in asset:
@@ -243,8 +242,7 @@ def getBytes(tx):
 		elif typ == 4:
 			multisignature = asset.get("multisignature", {})
 			pack("<bb", buf, (multisignature["min"], multisignature["lifetime"]))
-			for publicKey in multisignature["keysgroup"]:
-				pack_bytes(buf, unhexlify(publicKey))
+			pack_bytes(buf, "".join(multisignature["keysgroup"]).encode("utf-8"))
 	# if there is a signature
 	if tx.get("signature", False):
 		pack_bytes(buf, unhexlify(tx["signature"]))

@@ -3,10 +3,11 @@
 
 import struct
 
-from dposlib import rest
+from dposlib import ROOT, rest
 from dposlib.ark import crypto
 from dposlib.blockchain import Transaction, slots, cfg
 from dposlib.util.bin import unhexlify, hexlify
+from dposlib.util.data import loadJson, dumpJson
 	
 
 def computePayload(typ, tx):
@@ -27,16 +28,14 @@ def computePayload(typ, tx):
 		)
 
 	elif typ == 1:
-		if "secondSecret" in data:
-			secondPublicKey = crypto.getKeys(data["secondSecret"])["publicKey"]
-		elif "secondPublicKey" in data:
-			secondPublicKey = data["secondPublicKey"]
+		if "signature" in data:
+			secondPublicKey = data["signature"]["publicKey"]
 		else:
 			raise Exception("no secondSecret or secondPublicKey given")
 		return struct.pack("<33s", crypto.unhexlify(secondPublicKey))
 
 	elif typ == 2:
-		username = data.get("username", False)
+		username = data.get("delegate", {}).get("username", False)
 		if username:
 			length = len(username)
 			if 3 <= length <= 255:
@@ -47,24 +46,28 @@ def computePayload(typ, tx):
 			raise Exception("no username defined")
 
 	elif typ == 3:
-		delegatePublicKeys = data.get("delegatePublicKeys", False)
+		delegatePublicKeys = data.get("votes", False)
 		if delegatePublicKeys:
 			length = len(delegatePublicKeys)
 			payload = struct.pack("<B", length)
 			for delegatePublicKey in delegatePublicKeys:
-				payload += struct.pack("<34s", delegatePublicKey.encode())
+				delegatePublicKey = delegatePublicKey.replace("+", "01").replace("-", "00")
+				payload += struct.pack("<34s", crypto.unhexlify(delegatePublicKey))
 			return payload
 		else:
 			raise Exception("no up/down vote given")
 
 	elif typ == 4:
-		result = struct.pack("<BBB", data.get("minimum", 2), data.get("number", 3), data.get("lifetime", 24))
-		for publicKey in data.get("publicKeys"):
-			result += struct.pack("<33s", publicKey.encode())
+		data = data["multisignature"]
+		keysgroup = data.get("keysgroup", [])
+		payload = struct.pack("<BBB", data.get("min", 2), len(keysgroup), data.get("lifetime", 3))
+		for publicKey in keysgroup:
+			publicKey = publicKey.replace("+", "")
+			payload += struct.pack("<33s",  crypto.unhexlify(publicKey))
 		return payload
 
 	elif typ == 5:
-		dag = dara["dag"]
+		dag = data["dag"]
 		return struct.pack("<B%ss" % len(dag), dag.encode())
 
 	elif typ == 6:
@@ -97,23 +100,34 @@ def computePayload(typ, tx):
 		raise Exception("Unknown transaction type %d" % typ)
 
 
-def getBytes(tx):
-	typ = tx.get("type", 0)
-	vendorField = tx.get("vendorField", "")
-	vendorField = vendorField.encode("utf-8") if not isinstance(vendorField, bytes) else vendorField
+# def getBytes(tx):
+# 	typ = tx.get("type", 0)
+# 	vendorField = tx.get("vendorField", "")
+# 	vendorField = vendorField.encode("utf-8") if not isinstance(vendorField, bytes) else vendorField
 
-	header = struct.pack(
-		"<BBBBI33sQB",
-		tx.get("head", 0xff),
-		tx.get("version", 0x02),
-		tx.get("network", int(cfg.marker, base=16)),
-		typ,
-		tx.get("timestamp", slots.getTime()),
-		unhexlify(Transaction._publicKey),
-		tx["fee"],
-		len(vendorField)
-	)
+# 	header = struct.pack(
+# 		"<BBBBI33sQB",
+# 		tx.get("head", 0xff),
+# 		tx.get("version", 0x02),
+# 		tx.get("network", int(cfg.marker, base=16)),
+# 		typ,
+# 		tx.get("timestamp", slots.getTime()),
+# 		unhexlify(Transaction._publicKey),
+# 		tx["fee"],
+# 		len(vendorField)
+# 	)
 	
-	payload = computePayload(typ, tx)
+# 	payload = computePayload(typ, tx)
 
-	return header + vendorField + payload
+# 	return header + vendorField + payload
+
+
+def createWebhook(peer, event, target, conditions, folder=None):
+	data = rest.POST.api.webhooks(peer=peer, event=event, target=target, conditions=conditions, returnKey="data")
+	if "token" in data:
+		dumpJson(data, os.path.join(ROOT if not folder else folder, "%s.whk" % data["token"]))
+	return data
+
+
+def deleteWebhook(peer, id, token=None):
+	rest.DELETE.api.webhooks("%s"%id, peer=peer, token=token)

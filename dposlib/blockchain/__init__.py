@@ -23,6 +23,7 @@ class Transaction(dict):
 
 	DFEES = False
 	FMULT = 10000
+	FEESL = None
 
 	@staticmethod
 	def path():
@@ -64,8 +65,16 @@ class Transaction(dict):
 				delattr(Transaction, attr)
 
 	@staticmethod
-	def setDynamicFee():
-		Transaction.DFEES = True
+	def setDynamicFee(value="avgFee"):
+		if hasattr(cfg, "doffsets"):
+			Transaction.DFEES = True
+			if isinstance(value, int):
+				Transaction.FMULT = value
+				Transaction.FEESL = None
+			elif value in ["maxFee", "avgFee", "minFee"]:
+				Transaction.FEESL = value
+		else:
+			raise Exception("Dynamic fees can not be set on %s network" % cfg.network)
 
 	@staticmethod
 	def setStaticFee():
@@ -96,8 +105,6 @@ class Transaction(dict):
 		if hasattr(Transaction, "_publicKey"):
 			dict.__setitem__(self, "senderPublicKey", Transaction._publicKey)
 
-		self.setFees()
-
 	def __setitem__(self, item, value):
 		# cast values according to transaction typing
 		if item in dposlib.core.TYPING.keys():
@@ -105,8 +112,9 @@ class Transaction(dict):
 			if not isinstance(value, cast):
 				value = cast(value)
 			dict.__setitem__(self, item, value)
-			if item not in ["signature", "signSignature", "id"]:
+			if item not in ["signature", "signatures", "signSignature", "id"]:
 				self.pop("signature", False)
+				self.pop("signatures", False)
 				self.pop("signSignature", False)
 				self.pop("id", False)
 		# set internal private keys (secrets are not stored)
@@ -122,10 +130,26 @@ class Transaction(dict):
 
 	def setFees(self):
 		if Transaction.DFEES:
-			dposlib.core.setDynamicFees(self)
+			if Transaction.FEESL != None:
+				fee = cfg.feestats[self["type"]][Transaction.FEESL]
+			else:
+				fee = dposlib.core.computeDynamicFees(self)
 		else:
-			fee = cfg.fees.get(dposlib.core.TRANSACTIONS[self["type"]])
-			dict.__setitem__(self, "fee", fee)
+			k = len(self.get("asset", {}).get("multisignature", {}).get("keysgroup", []))
+			fee = cfg.fees.get(dposlib.core.TRANSACTIONS[self["type"]]) * (1+k)
+		dict.__setitem__(self, "fee", fee)
+
+	def feeIncluded(self):
+		if self["type"] in [1, 7]:
+			if not hasattr(self, "_amount"):
+				setattr(self, "_amount", self["amount"])
+			self.__setitem__(self, "amount", self._amount - fee)
+
+	def feeExcluded(self):
+		if self["type"] in [1, 7]:
+			if hasattr(self, "_amount"):
+				self.__setitem__(self, "amount", self._amount)
+				delattr(self, "_amount")
 
 	def signWithSecret(self, secret):
 		Transaction.link(secret)
@@ -134,6 +158,9 @@ class Transaction(dict):
 	def signSignWithSecondSecret(self, secondSecret):
 		Transaction.link(None, secondSecret)
 		self.signSign()
+
+	def multiSignWithSecret(self, secret):
+		self.multiSignWithKey(dposlib.core.crypto.getKeys(secret)["privateKey"])
 
 	def signWithKeys(self, publicKey, privateKey):
 		dict.__setitem__(self, "senderPublicKey", publicKey)
@@ -145,9 +172,22 @@ class Transaction(dict):
 		Transaction._secondPrivateKey = secondPrivateKey
 		self.signSign()
 
+	def multiSignWithKey(self, privateKey):
+		signature = dposlib.core.crypto.getSignature(self, privateKey)
+		if "signatures" in self:
+			self["signatures"].append(signature)
+		else:
+			self["signatures"] = [signature]
+
 	def sign(self):
+		self.setFees()
 		if hasattr(Transaction, "_privateKey"):
+			address = dposlib.core.crypto.getAddress(Transaction._publicKey)
 			dict.__setitem__(self, "senderPublicKey", Transaction._publicKey)
+			if "senderId" not in self:
+				self["senderId"] = address
+			if self["type"] in [1, 3, 4] and "recipientId" not in self:
+				self["recipientId"] = address
 			self["signature"] = dposlib.core.crypto.getSignature(self, Transaction._privateKey)
 		else:
 			raise Exception("Orphan transaction can not sign itsef")
@@ -169,7 +209,6 @@ class Transaction(dict):
 
 	def finalize(self, secret=None, secondSecret=None):
 		Transaction.link(secret, secondSecret)
-		self.setFees()
 		if hasattr(Transaction, "_privateKey"):
 			self.sign()
 			if hasattr(Transaction, "_secondPrivateKey"):

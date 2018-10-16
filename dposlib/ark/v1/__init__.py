@@ -19,7 +19,6 @@ TRANSACTIONS = {
 	1: "secondsignature",
 	2: "delegate",
 	3: "vote",
-	4: "multisignature",
 }
 TYPING = {
 	"timestamp": int,
@@ -74,7 +73,8 @@ def rotate_peers():
 
 def init():
 	global DAEMON_PEERS
-	Transaction.DFEES = False
+	Transaction.setStaticFee()
+
 
 	cfg.begintime = datetime(*cfg.begintime, tzinfo=pytz.UTC)
 	response = rest.GET.api.loader.autoconfigure()
@@ -110,14 +110,14 @@ def transfer(amount, address, vendorField=None):
 
 
 def registerSecondSecret(secondSecret):
-	return registerSecondPublicKey(crypto.getKeys(secondsecret)["publicKey"])
+	return registerSecondPublicKey(crypto.getKeys(secondSecret)["publicKey"])
 
 def registerSecondPublicKey(secondPublicKey):
 	return Transaction(
 		type=1,
 		asset={
-			"signature":{
-				"publicKey":secondPublicKey
+			"signature": {
+				"publicKey": secondPublicKey
 			}
 		}
 	)
@@ -127,8 +127,8 @@ def registerAsDelegate(username):
 	return Transaction(
 		type=2,
 		asset={
-			"delegate":{
-				"username":username
+			"delegate": {
+				"username": username
 			}
 		}
 	)
@@ -138,8 +138,8 @@ def upVote(*usernames):
 	return Transaction(
 		type=3,
 		asset={
-			"votes":{
-				"username":["+"+rest.GET.api.delegates.get(username=username, returnKey="delegate")["publicKey"] for username in usernames]
+			"votes": {
+				"username": ["+"+rest.GET.api.delegates.get(username=username, returnKey="delegate")["publicKey"] for username in usernames]
 			}
 		}
 	)
@@ -149,8 +149,8 @@ def downVote(*usernames):
 	return Transaction(
 		type=3,
 		asset={
-			"votes":{
-				"username":["-"+rest.GET.api.delegates.get(username=username, returnKey="delegate")["publicKey"] for username in usernames]
+			"votes": {
+				"username": ["-"+rest.GET.api.delegates.get(username=username, returnKey="delegate")["publicKey"] for username in usernames]
 			}
 		}
 	)
