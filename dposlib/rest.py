@@ -2,8 +2,8 @@
 # © Toons
 
 """
-`rest` module It loads networks constants to `cfg` module and provides smart GET,
-PUT and POST endpoints classes.
+`rest` module loads networks constants to `cfg` module and provides GET, PUT and
+POST endpoints classes.
 
 >>> from dposlib import rest
 >>> rest.use("ark")
@@ -90,7 +90,7 @@ class EndPoint(object):
 			# print(req.url)
 			data = req.json()
 		except Exception as error:
-			data = {"success": False, "error": error, "peer": peer}
+			data = {"success": False, "error": "%r"%error, "except": True}
 		else:
 			if return_key in data:
 				data = data.get(return_key, {})
@@ -100,6 +100,7 @@ class EndPoint(object):
 
 	@staticmethod
 	def _POST(*args, **kwargs):
+		return_key = kwargs.pop('returnKey', False)
 		peer = kwargs.pop("peer", False)
 		peer = peer if peer else random.choice(cfg.peers)
 		try:
@@ -113,11 +114,15 @@ class EndPoint(object):
 			# print(req.url)
 			data = req.json()
 		except Exception as error:
-			data = {"success": False, "error": error, "peer": peer}
+			data = {"success": False, "error": "%r"%error, "except": True}
+		else:
+			if return_key in data:
+				data = data.get(return_key, {})
 		return data
 
 	@staticmethod
 	def _PUT(*args, **kwargs):
+		return_key = kwargs.pop('returnKey', False)
 		peer = kwargs.pop("peer", False)
 		peer = peer if peer else random.choice(cfg.peers)
 		try:
@@ -131,11 +136,15 @@ class EndPoint(object):
 			# print(req.url)
 			data = req.json()
 		except Exception as error:
-			data = {"success": False, "error": error, "peer": peer}
+			data = {"success": False, "error": "%r"%error, "except": True}
+		else:
+			if return_key in data:
+				data = data.get(return_key, {})
 		return data
 
 	@staticmethod
 	def _DELETE(*args, **kwargs):
+		return_key = kwargs.pop('returnKey', False)
 		peer = kwargs.pop("peer", False)
 		peer = peer if peer else random.choice(cfg.peers)
 		try:
@@ -149,7 +158,10 @@ class EndPoint(object):
 			# print(req.url)
 			data = req.json()
 		except Exception as error:
-			data = {"success": False, "error": error, "peer": peer}
+			data = {"success": False, "error": "%r"%error, "except": True}
+		else:
+			if return_key in data:
+				data = data.get(return_key, {})
 		return data
 
 	def __init__(self, elem=None, parent=None, method=None):
