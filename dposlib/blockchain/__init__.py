@@ -145,20 +145,19 @@ class Transaction(dict):
 		else:
 			# k is 0 or signature number in case of multisignature tx
 			k = len(self.get("asset", {}).get("multisignature", {}).get("keysgroup", []))
-			fee = cfg.fees.get(dposlib.core.TRANSACTIONS[self["type"]]) * (1+k)
+			fee = cfg.fees["staticFees"].get(dposlib.core.TRANSACTIONS[self["type"]]) * (1+k)
 		dict.__setitem__(self, "fee", fee)
 
 	def feeIncluded(self):
-		if self["type"] in [0, 7]:
+		if self["type"] in [0, 7] and self["fee"] < self["amount"]:
 			if not hasattr(self, "_amount"):
 				setattr(self, "_amount", self["amount"])
 			self["amount"] = self._amount - self["fee"]
 
 	def feeExcluded(self):
-		if self["type"] in [0, 7]:
-			if hasattr(self, "_amount"):
-				self["amount"] = self._amount
-				delattr(self, "_amount")
+		if self["type"] in [0, 7] and hasattr(self, "_amount"):
+			self["amount"] = self._amount
+			delattr(self, "_amount")
 
 	# sign functions using passphrases
 	def signWithSecret(self, secret):
