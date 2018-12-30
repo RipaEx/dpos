@@ -72,7 +72,7 @@ def init():
 	cfg.headers["API-Version"] = "2"
 
 	cfg.fees = constants["fees"]
-	cfg.doffsets = cfg.fees["dynamicFees"]["addonBytes"]
+	cfg.doffsets = cfg.fees.get("dynamicFees", {"addonBytes":{}})["addonBytes"]
 	cfg.feestats = dict([i["type"],i["fees"]] for i in data.get("feeStatistics", {}))
 	cfg.explorer = data["explorer"]
 	cfg.token = data["token"]
@@ -98,8 +98,10 @@ def computeDynamicFees(tx):
 	payload = computePayload(typ_, tx)
 	T = cfg.doffsets[TRANSACTIONS[typ_]]
 	signatures = "".join([tx.get("signature", ""), tx.get("signSignature", "")])
-	minimum = cfg.feestats.get(tx["type"], {}).get("maxFee", 2500000000)
-	return min(minimum, int((T + 50 + lenVF + len(payload)) * Transaction.FMULT))
+	return min(
+		cfg.feestats.get(typ_, {}).get("maxFee", cfg.fees["staticFees"][TRANSACTIONS[typ_]]),
+		int((T + 50 + lenVF + len(payload)) * Transaction.FMULT)
+	)
 
 
 def upVote(*usernames):
