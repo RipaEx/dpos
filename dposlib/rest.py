@@ -84,10 +84,13 @@ class EndPoint(object):
 				data = {"success": True, "except": True, "data": req.text, "error": "%r"%error}
 			else:
 				tmp = data.get(returnKey, False)
-				if isinstance(tmp, dict):
-					data = filter_dic(tmp)
-				elif returnKey:
-					data["warning"] = "returnKey %s not found" % returnKey
+				if not tmp:
+					if returnKey:
+						data["warning"] = "returnKey %s not found" % returnKey
+				else:
+					data = tmp
+					if isinstance(tmp, dict):
+						data = filter_dic(tmp)
 			return data
 		else:
 			return {"success": False, "except": True, "error": "status code %s returned" % req.status_code}
@@ -235,13 +238,14 @@ def use(network, **kwargs):
 	cfg.timeout = 5
 	cfg.network = None
 	cfg.hotmode = False
+	cfg.compressed = True
 	cfg.begintime = datetime.datetime(1970, 1, 1, tzinfo=pytz.UTC)
 	cfg.headers = {"Content-Type": "application/json; charset=utf-8"}
 
 	# try to load network.net configuration
 	path = os.path.join(ROOT, "network", network + ".net")
 	if os.path.exists(path):
-		with io.open(os.path.join(ROOT, "network", network + ".net")) as f:
+		with io.open(os.path.join(ROOT, "network", network + ".net"), encoding='utf8') as f:
 			data = json.load(f)
 	else:
 		raise Exception('"{}" blockchain parameters does not exist'.format(network))

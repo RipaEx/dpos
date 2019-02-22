@@ -8,7 +8,6 @@ import weakref
 
 from collections import OrderedDict
 
-from dposlib import ROOT
 from dposlib.blockchain import slots, cfg
 from dposlib.util.asynch import setInterval
 from dposlib.util.data import loadJson, dumpJson
@@ -19,8 +18,23 @@ def track_data(value=True):
 	Data.TRACK = value
 
 
+def broadcastTransactions(*transactions, **params):
+	serialized = params.pop("serialzed", False)
+	report = []
+	if serialized:
+		transactions = [dposlib.core.serialize(tx) for tx in transactions]
+		for chunk in [transactions[i:i+cfg.maxlimit] for i in range(0, len(transactions), cfg.maxlimit)]:
+			pass
+	else:
+		for chunk in [transactions[i:i+cfg.maxlimit] for i in range(0, len(transactions), cfg.maxlimit)]:
+			response = dposlib.rest.POST.api.transactions(transactions=chunk)
+			report.append(response)
+	return None if len(report) == 0 else report[0] if len(report) == 1 else report
+
+
 class Transaction(dict):
 
+	VERSION = 2
 	DFEES = False
 	FMULT = 10000
 	FEESL = None
@@ -29,7 +43,7 @@ class Transaction(dict):
 	def path():
 		"""Return current registry path."""
 		if hasattr(Transaction, "_publicKey"):
-			return os.path.join(ROOT, ".registry", cfg.network, Transaction._publicKey)
+			return os.path.join(dposlib.ROOT, ".registry", cfg.network, Transaction._publicKey)
 		else:
 			raise Exception("Register a public key or set secret")
 
@@ -102,7 +116,7 @@ class Transaction(dict):
 			raise Exception("No blockchain available")
 		data = dict(arg, **kwargs)
 		dict.__init__(self)
-		
+
 		self["type"] = data.pop("type", 0) # default type is 0 (transfer)
 		self["timestamp"] = data.pop("timestamp", slots.getTime()) # set timestamp if no one given
 		self["asset"] = data.pop("asset", {}) # put asset value if no one given
@@ -220,12 +234,11 @@ class Transaction(dict):
 		else:
 			raise Exception("Transaction not signed")
 
-	def finalize(self, secret=None, secondSecret=None, dynamic_fee=False, fee_included=False):
+	def finalize(self, secret=None, secondSecret=None, fee_included=False):
 		"""
 		Finalize a transaction by setting fees, signatures and id.
 		"""
 		Transaction.link(secret, secondSecret)
-		self.setDynamicFee() if dynamic_fee else self.setStaticFee()
 		self.setFees()
 		self.feeIncluded() if fee_included else self.feeExcluded()
 		if hasattr(Transaction, "_privateKey"):
@@ -246,7 +259,7 @@ class Transaction(dict):
 			dumpJson(registry, pathfile)
 
 
-###### API 
+###### API
 class Data:
 
 	REF = set()
@@ -267,19 +280,20 @@ class Data:
 		return wrapper
 
 	@setInterval(30)
-	def heartbeat():
+	def heartbeat(self):
+		dead = set()
 		for ref in list(Data.REF):
-			dead, obj = set(), ref()
+			obj = ref()
 			if obj:
 				obj.update()
 			else:
-				dead.add(ref)	
+				dead.add(ref)
 		Data.REF -= dead
 
 		if len(Data.REF) == 0:
 			Data.EVENT.set()
 			Data.EVENT = False
-	
+
 	def __init__(self, endpoint, *args, **kwargs):
 		track = kwargs.pop("track", Data.TRACK)
 		self.__dict = dict(**endpoint(*args, **kwargs))
@@ -288,7 +302,7 @@ class Data:
 		self.__args = args
 
 		if Data.EVENT == False:
-			Data.EVENT = Data.heartbeat()
+			Data.EVENT = self.heartbeat()
 		if track:
 			self.track()
 
@@ -296,7 +310,10 @@ class Data:
 		return json.dumps(OrderedDict(sorted(self.__dict.items(), key=lambda e:e[0])), indent=2)
 
 	def __getattr__(self, attr):
-		return self.__dict[attr]
+		if attr in self.__dict:
+			return self.__dict[attr]
+		else:
+			return Data.__getattribute__(attr)
 
 	def update(self):
 		result = self.__endpoint(*self.__args, **self.__kwargs)
@@ -308,14 +325,18 @@ class Data:
 
 
 class Wallet(Data):
-	
+
 	link = staticmethod(lambda s,ss=None: [Transaction.unlink(), Transaction.link(s,ss)][0])
 	unlink = staticmethod(Transaction.unlink)
 
 	def __init__(self, address, **kw):
 		Data.__init__(self, dposlib.rest.GET.api.accounts, **dict({"address":address, "returnKey":"account"}, **kw))
 
-	# def link(self, secret, secondSecret):
+	def setFeeLevel(self, fee_level=None):
+		if fee_level == None:
+			Transaction.setStaticFee()
+		else:
+			Transaction.setDynamicFee(fee_level)
 
 	def transactions(self, limit=50):
 		received, sent, count = [], [], 0
@@ -330,54 +351,34 @@ class Wallet(Data):
 	def send(self, amount, address, vendorField=None, fee_included=False):
 		tx = dposlib.core.transfer(amount, address, vendorField)
 		tx.finalize(fee_included=fee_included)
-		return dposlib.rest.POST.api.transactions(transactions=[tx])
+		return broadcastTransactions(tx)
+
+	@Data.wallet_islinked
+	def registerSecondSecret(self, secondSecret):
+		tx = dposlib.core.registerSecondSecret(secondSecret)
+		tx.finalize()
+		return broadcastTransactions(tx)
+
+	@Data.wallet_islinked
+	def registerSecondPublicKey(self, secondPublicKey):
+		tx = dposlib.core.registerSecondPublicKey(secondPublicKey)
+		tx.finalize()
+		return broadcastTransactions(tx)
+
+	@Data.wallet_islinked
+	def registerAsDelegate(self, username):
+		tx = dposlib.core.registerAsDelegate(username)
+		tx.finalize()
+		return broadcastTransactions(tx)
 
 	@Data.wallet_islinked
 	def upVote(self, *usernames):
 		tx = dposlib.core.upVote(*usernames)
 		tx.finalize()
-		return dposlib.rest.POST.api.transactions(transactions=[tx])
+		return broadcastTransactions(tx)
 
 	@Data.wallet_islinked
 	def downVote(self, *usernames):
 		tx = dposlib.core.downVote(*usernames)
 		tx.finalize()
-		return dposlib.rest.POST.api.transactions(transactions=[tx])
-
-	def setFeeLevel(fee_level):	
-		pass
-
-
-class Delegate(Data):
-	
-	def __init__(self, username, **kw):
-		Data.__init__(self, dposlib.rest.GET.api.delegates.get, **dict({"username":username, "returnKey":"delegate"}, **kw))
-
-	def forged(self):
-		result = filter_dic(dposlib.rest.GET.api.delegates.forging.getForgedByAccount(generatorPublicKey=self.publicKey))
-		result.pop("success", False)
-		return result
-
-	def voters(self):
-		voters = [a for a in dposlib.rest.GET.api.delegates.voters(publicKey=self.publicKey, returnKey="accounts") if a["balance"] not in [0, "0"]]
-		return list(sorted([filter_dic(dic) for dic in voters], key=lambda e:e["balance"], reverse=True))
-	
-	def lastBlock(self):
-		blocks = [blk for blk in dposlib.rest.GET.api.blocks(returnKey="blocks") if blk["generatorId"] == self.address]
-		if len(blocks):
-			return Block(blocks[0]["id"])
-
-	def wallet(self):
-		return Wallet(self.address)
-
-
-class Block(Data):
-
-	def __init__(self, blk_id, **kw):
-		Data.__init__(self, dposlib.rest.GET.api.blocks.get, **dict({"id":blk_id, "returnKey":"block"}, **kw))
-
-	def previous(self):
-		return Block(self.previousBlock)
-
-	def transactions(self):
-		return dposlib.rest.GET.api.transactions(blockId=self.id, returnKey="transactions")
+		return broadcastTransactions(tx)

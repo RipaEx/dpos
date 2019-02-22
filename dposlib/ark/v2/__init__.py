@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 # © Toons
 
-
 import pytz
-
 from datetime import datetime
 
 from dposlib import rest
-from dposlib.ark import crypto
 from dposlib.blockchain import cfg, Transaction
 from dposlib.util.asynch import setInterval
-from dposlib.ark.v1 import transfer, registerAsDelegate, registerSecondPublicKey, registerSecondSecret
-from dposlib.ark.v2.mixin import computePayload, createWebhook, deleteWebhook
+from dposlib.ark.v1 import crypto, transfer, registerAsDelegate, registerSecondPublicKey, registerSecondSecret
+from dposlib.ark.v2.mixin import serialize, serializePayload
 from dposlib.ark.v2 import api
+
 
 DAEMON_PEERS = None
 TRANSACTIONS = {
@@ -20,14 +18,16 @@ TRANSACTIONS = {
 	1: "secondSignature",
 	2: "delegateRegistration",
 	3: "vote",
-	4: "multiSignature",
-	# 5: "ipfs",
-	# 6: "timelockTransfer",
-	# 7: "multiPayment",
-	# 8: "delegateResignation",
+	# 4: "multiSignature",
+	5: "ipfs",
+	6: "timelockTransfer",
+	7: "multiPayment",
+	8: "delegateResignation",
 }
 TYPING = {
 	"timestamp": int,
+	"timelockType": int,
+	"timelock": int,
 	"type": int,
 	"amount": int,
 	"senderPublicKey": str,
@@ -47,7 +47,8 @@ def select_peers():
 		"http://%(ip)s:%(port)s" % {
 			"ip":p["ip"],
 			"port":cfg.ports["core-api"]
-		} for p in rest.GET.api.peers().get("data", [])][:cfg.broadcast]
+		} for p in rest.GET.api.peers().get("data", []) if p.get("version", "") > cfg.minversion
+	][:cfg.broadcast]
 	if len(peers):
 		cfg.peers = peers
 
@@ -61,31 +62,35 @@ def init():
 	global DAEMON_PEERS
 
 	data = rest.GET.api.v2.node.configuration().get("data", {})
+	if data != {}:
+		cfg.explorer = data["explorer"]
+		cfg.pubKeyHash = data["version"]
+		cfg.token = data["token"]
+		cfg.symbol = data["symbol"]
+		cfg.ports = dict([k.split("/")[-1],v] for k,v in data["ports"].items())
+		cfg.feestats = dict([i["type"],i["fees"]] for i in data.get("feeStatistics", {}))
 
-	constants =  data["constants"]
-	cfg.delegate = constants["activeDelegates"]
-	cfg.maxlimit = constants["block"]["maxTransactions"]
-	cfg.blocktime = constants["blocktime"]
-	cfg.begintime = pytz.utc.localize(datetime.strptime(constants["epoch"], "%Y-%m-%dT%H:%M:%S.000Z"))
-	cfg.blockreward = constants["reward"]/100000000
+		cfg.headers["nethash"] = data["nethash"]
+		cfg.headers["API-Version"] = "2"
 
-	cfg.headers["nethash"] = data["nethash"]
-	cfg.headers["version"] = str(data["version"])
-	cfg.headers["API-Version"] = "2"
+		constants =  data["constants"]
+		cfg.delegate = constants["activeDelegates"]
+		cfg.maxlimit = constants["block"]["maxTransactions"]
+		cfg.blocktime = constants["blocktime"]
+		cfg.begintime = pytz.utc.localize(datetime.strptime(constants["epoch"], "%Y-%m-%dT%H:%M:%S.000Z"))
+		cfg.blockreward = constants["reward"]/100000000.
+		cfg.fees = constants["fees"]
+		# on v 2.0.x dynamicFees field is in "fees" field
+		cfg.doffsets = cfg.fees.get("dynamicFees", {}).get("addonBytes", {})
+		# on v 2.1.x dynamicFees field is in "transactionPool" Field
+		cfg.doffsets.update(data.get("transactionPool", {}).get("dynamicFees", {}).get("addonBytes", {}))
 
-	cfg.fees = constants["fees"]
-	# on v 2.1.x dynamicFees field does not exist
-	# so use get with an expected default value
-	cfg.doffsets = cfg.fees.get("dynamicFees", {"addonBytes":{}})["addonBytes"]
-	cfg.feestats = dict([i["type"],i["fees"]] for i in data.get("feeStatistics", {}))
-	cfg.explorer = data["explorer"]
-	cfg.token = data["token"]
-	cfg.symbol = data["symbol"]
-	cfg.ports = dict([k.split("/")[-1],v] for k,v in data["ports"].items())
+		select_peers()
+		DAEMON_PEERS = rotate_peers()
+		Transaction.setDynamicFee()
 
-	select_peers()
-	DAEMON_PEERS = rotate_peers()
-	Transaction.setDynamicFee()
+	else:
+		raise Exception("Initialization error")
 
 
 def stop():
@@ -94,12 +99,13 @@ def stop():
 		DAEMON_PEERS.set()
 
 
+# https://github.com/ArkEcosystem/AIPs/blob/master/AIPS/aip-16.md
 def computeDynamicFees(tx):
 	typ_ = tx.get("type", 0)
 	vendorField = tx.get("vendorField", "")
 	vendorField = vendorField.encode("utf-8") if not isinstance(vendorField, bytes) else vendorField
 	lenVF = len(vendorField)
-	payload = computePayload(typ_, tx)
+	payload = serializePayload(tx)
 	T = cfg.doffsets.get(TRANSACTIONS[typ_], 0)
 	signatures = "".join([tx.get("signature", ""), tx.get("signSignature", "")])
 	return min(
@@ -126,22 +132,42 @@ def downVote(*usernames):
 	)
 
 
-def multiSignature(*publicKeys, **kwargs): #lifetime=72, minimum=2):
+def registerIPFS(dag):
 	return Transaction(
-		type=4,
-		asset= {
-			"multisignature": {
-				"keysgroup": publicKeys,
-				"lifetime": kwargs.get("lifetime", 72),
-				"min": kwargs.get("minimum", 2),
-			}
+		type=5,
+		asset={
+			"ipfs": {"dag": dag}
 		}
 	)
 
 
-def nTransfer(*pairs, **kwargs): #, vendorField=None):
+def timelockTransfer(amount, address, lockvalue, locktype="timestamp", vendorField=None):
+	return Transaction(
+		type=6,
+		amount=amount*100000000,
+		recipientId=address,
+		vendorField=vendorField,
+		timelock=lockvalue,
+		timelockType={
+			"timestamp":0,
+			"blockheight":1
+		}[locktype]
+	)
+
+
+def multiPayment(*pairs, **kwargs):
 	return Transaction(
 		type=7,
 		vendorField=kwargs.get("vendorField", None),
-		asset=dict(pairs)
+		asset={
+			"payments": [
+				{"amount":a, "recipientId":r} for r,a in pairs
+			]
+		}
+	)
+
+
+def delegateResignation():
+	return Transaction(
+		type=8
 	)

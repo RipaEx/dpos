@@ -1,6 +1,6 @@
 # `dposlib` Quick View
 
-`dposlib` package aims to provide a simple API to link major DPOS blockchain.
+`dposlib` package aims to provide a simple API to ARK blockchain and forks.
 
 ## Support this project
 
@@ -54,15 +54,6 @@
       - [x] Persona : `prs`
       - [x] Ripa : `ripa`
       - [x] Phantom : `xph`
-  - [x] Lisk (bêta)
-    * mainet : `lisk`
-    * forks
-      - [x] Local World Forwarder :
-        * mainet : `lwf`
-        * testnet : `tlwf`
-      - [x] Shift : 
-        * mainet : `shift`
-        * testnet : `tshift`
 
 ## Network API
 
@@ -110,8 +101,6 @@
 
   - [x] Ark v1
   - [x] Ark v2
-  - [x] Lisk v09
-  - [ ] Lisk v10
 
 ## Install
 
@@ -141,12 +130,24 @@
 ### 0.1.5
   - [x] compatibility with both ark-core v2 devnet and mainnet
 
-### 0.1.6 : [current work](https://github.com/Moustikitos/dpos/archive/master.zip)
+### 0.1.6 :
+  - [x] Ark-core v 2.1.x compatibility
+
+### 0.1.7 :
+  - [X] added `transaction` and `rest` MarkDown documentation files
+  - [x] dposlib.core.api is both python 2.x and 3.x compliant
+  - [x] added Webhook api (experimental)
+  - [x] fee data initialisation improvement
+  - [x] transaction broadcasting improvement
+  - [x] peer selection improvement
+  - [x] Lisk blockchain and forks developpement frozen
+
+### 0.1.8 [current work](https://github.com/Moustikitos/dpos/archive/master.zip)
 
 ## TODO
-  - [ ] write `api` for lisk V10 network
   - [ ] integrate LedgerBlue Nano S use
   - [ ] doc writing
   - [ ] unittest
   - [ ] wallet
   - [ ] CLI
+ 
