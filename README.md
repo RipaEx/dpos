@@ -5,7 +5,7 @@
 ## Support this project
 
   * [X] Send &#1126; to `AUahWfkfr5J4tYakugRbfow7RWVTK35GPW`
-  * [X] Vote `arky` on [Ark blockchain](https://explorer.ark.io) and [earn &#1126; weekly](http://dpos.arky-delegate.info/arky)
+  * [X] Vote `arky` on [Ark blockchain](https://explorer.ark.io) and [earn &#1126; weekly](http://arky-delegate.info/arky)
 
 ## Overview
 
@@ -99,11 +99,6 @@
 {'transactionIds': ['bbce72e7a76f5f71209c8ab29b4b4299a409241dfc77835150459a34bd5a5c16'], 'success': True}
 ```
 
-  - [x] Ark v1
-  - [x] Ark v2
-
-## Install
-
 ## Version
 
 ### 0.1.0
@@ -134,7 +129,7 @@
   - [x] Ark-core v 2.1.x compatibility
 
 ### 0.1.7 :
-  - [X] added `transaction` and `rest` MarkDown documentation files
+  - [x] added `transaction` and `rest` MarkDown documentation files
   - [x] dposlib.core.api is both python 2.x and 3.x compliant
   - [x] added Webhook api (experimental)
   - [x] fee data initialisation improvement
@@ -143,9 +138,10 @@
   - [x] Lisk blockchain and forks developpement frozen
 
 ### 0.1.8 [current work](https://github.com/Moustikitos/dpos/archive/master.zip)
+  - [X] added ledger nano S support
+  - [X] peer selection now checks syncing status
 
 ## TODO
-  - [ ] integrate LedgerBlue Nano S use
   - [ ] doc writing
   - [ ] unittest
   - [ ] wallet
