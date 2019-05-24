@@ -5,6 +5,7 @@
 import os
 import dposlib
 
+from dposlib import ldgr
 from dposlib.util import misc
 from dposlib.util.data import filter_dic, loadJson, dumpJson
 
@@ -21,6 +22,26 @@ class Wallet(dposlib.blockchain.Wallet):
 		sent = misc.loadPages(dposlib.rest.GET.api.wallets.__getattr__(self.address).__getattr__("transactions").__getattr__("sent"), limit=limit)
 		received = misc.loadPages(dposlib.rest.GET.api.wallets.__getattr__(self.address).__getattr__("transactions").__getattr__("received"), limit=limit)
 		return [filter_dic(dic) for dic in sorted(received+sent, key=lambda e:e.get("timestamp", {}).get("epoch"), reverse=True)][:limit]
+
+
+class NanoS(dposlib.blockchain.NanoS):
+
+	def __init__(self, network, account, index, **kw):
+		# aip20 : https://github.com/ArkEcosystem/AIPs/issues/29
+		self.derivationPath = "44'/%s'/%s'/%s'/%s" % (dposlib.rest.cfg.slip44, network, account, index)
+		self.address = dposlib.core.crypto.getAddress(ldgr.getPublicKey(ldgr.parseBip32Path(self.derivationPath)))
+		self.debug = kw.pop("debug", False)
+		dposlib.blockchain.Data.__init__(self, dposlib.rest.GET.api.wallets, self.address, **dict({"returnKey":"data"}, **kw))
+
+	@staticmethod
+	def fromDerivationPath(derivationPath, **kw):
+		nanos = NanoS(0,0,0, **kw)
+		address = dposlib.core.crypto.getAddress(ldgr.getPublicKey(ldgr.parseBip32Path(derivationPath)))
+		nanos.address = address
+		nanos.derivationPath = derivationPath
+		nanos._Data__args = (address,)
+		nanos.update()
+		return nanos
 
 
 class Delegate(dposlib.blockchain.Data):

@@ -1,11 +1,29 @@
-# `dposlib` Quick View
+> `dposlib` package aims to provide a simple API to ARK blockchain and forks.
 
-`dposlib` package aims to provide a simple API to ARK blockchain and forks.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Support this project
+[![PyPI pyversions](https://img.shields.io/pypi/pyversions/dposlib.svg)](https://pypi.python.org/pypi/dposlib/)
+[![GitHub release](https://img.shields.io/github/release/Moustikitos/dpos.svg)](https://GitHub.com/Moustikitos/dpos/releases/)
+
+[![PyPI version shields.io](https://img.shields.io/pypi/v/dposlib.svg)](https://pypi.python.org/pypi/dposlib/)
+[![PyPI download total](https://img.shields.io/pypi/dm/dposlib.svg)](https://pypi.python.org/pypi/dposlib/)
+
+### Support this project
 
   * [X] Send &#1126; to `AUahWfkfr5J4tYakugRbfow7RWVTK35GPW`
   * [X] Vote `arky` on [Ark blockchain](https://explorer.ark.io) and [earn &#1126; weekly](http://arky-delegate.info/arky)
+
+# Quick View
+
+## Available network
+
+  - [x] Ark
+    * mainet : `ark`
+    * devnet : `dark`
+    * forks
+      - [x] Persona : `prs`
+      - [x] Ripa : `ripa`
+      - [x] Phantom : `xph`
 
 ## Overview
 
@@ -43,17 +61,6 @@
 >>> rest.POST.api.transactions(transactions=[tx])
 {'data': {'broadcast': ['5a90ea87fb8848c3402e5d6da5d34651eee01124387aa4f499c84621e03dd791'], 'excess': [], 'invalid': [], 'accept': []}}
 ```
-
-## Available network
-
-  - [x] Ark
-    * mainet : `ark`
-    * devnet : `dark`
-    * forks
-      - [x] Kapu : `kapu`
-      - [x] Persona : `prs`
-      - [x] Ripa : `ripa`
-      - [x] Phantom : `xph`
 
 ## Network API
 
@@ -99,6 +106,42 @@
 {'transactionIds': ['bbce72e7a76f5f71209c8ab29b4b4299a409241dfc77835150459a34bd5a5c16'], 'success': True}
 ```
 
+## Ledger Nano S API
+
+```python
+>>> rest.use("dark")
+>>> # 0,0,0 = devnet, account, index
+>>> ldg = dposlib.core.api.NanoS(0,0,0)
+>>> ldg
+{
+  "address": "DEVx3osw9Rj1wZhoUf2dMbPmmUN9P3XFpb",
+  "balance": 69.9939675,
+  "isDelegate": true,
+  "publicKey": "025993c687f1e3418e0aa47b6ab091e414b51c45b32a107745c01c124652112c7a",
+}
+>>> ldg.derivationPath
+"44'/1'/0'/0'/0"
+>>> ldg.send(1, "DGuuCwJYoEheBAC4PZTBSBasaDHxg2e6j7")
+```
+<img src="ledger_confirm.png" />
+
+```python
+{'data': {'accept': ['7445b0748aae8778bcd73d2ca40d8cc19ffee7b68ea89f05e1934b96dd73ed2f'], 'broadcast': ['7445b0748aae8778bcd73d2ca40d8cc19ffee7b68ea89f05e1934b96dd73ed2f'], 'excess': [], 'invalid': []}}
+>>> ldg.upVote("darktoons")
+```
+<img src="ledger_confirm.png" />
+
+```python
+{'data': {'accept': ['c13791c8ca0cbcd8ef62a722a4a157fa6aa97a86770f988d9a6dc3234b562bc2'], 'broadcast': ['c13791c8ca0cbcd8ef62a722a4a157fa6aa97a86770f988d9a6dc3234b562bc2'], 'excess': [], 'invalid': []}}
+>>> dposlib.core.api.NanoS.fromDerivationPath("44'/1'/0'/0/0")
+{
+  "address": "DDC7kWToyvfKa8dvRTXitr7o5FHMVKtBve",
+  "balance": 95.20477813,
+  "publicKey": "038473178d89988b1f8428efe758b99ebf1d49c47b679f3f4a9cdc0829fa6ece2b",
+  "vote": "03a02b9d5fdd1307c2ee4652ba54d492d1fd11a7d1bb3f3a44c4a05e79f19de933"
+}
+```
+
 ## Version
 
 ### 0.1.0
@@ -113,7 +156,7 @@
 ### 0.1.2
   - [x] Packaging improvement
 
-### 0.1.3 : available on [PyPi](https://pypi.org/project/dposlib/)
+### 0.1.3
   - [x] REST requests header bugfix (ubuntu)
 
 ### 0.1.4
@@ -125,10 +168,10 @@
 ### 0.1.5
   - [x] compatibility with both ark-core v2 devnet and mainnet
 
-### 0.1.6 :
+### 0.1.6
   - [x] Ark-core v 2.1.x compatibility
 
-### 0.1.7 :
+### 0.1.7
   - [x] added `transaction` and `rest` MarkDown documentation files
   - [x] dposlib.core.api is both python 2.x and 3.x compliant
   - [x] added Webhook api (experimental)
@@ -137,13 +180,16 @@
   - [x] peer selection improvement
   - [x] Lisk blockchain and forks developpement frozen
 
-### 0.1.8 [current work](https://github.com/Moustikitos/dpos/archive/master.zip)
-  - [X] added ledger nano S support
-  - [X] peer selection now checks syncing status
+### 0.1.8
+  - [x] added ark v2.4 compatibility
+  - [x] api wallet link using getpass library
+  - [x] added ledger nano S support (transaction type 0, 1, 2 & 3)
+  - [x] peer selection now checks syncing status
+
+### 0.1.9  [current work](https://github.com/Moustikitos/dpos/archive/master.zip)
 
 ## TODO
   - [ ] doc writing
   - [ ] unittest
-  - [ ] wallet
   - [ ] CLI
  

@@ -9,9 +9,11 @@ import json
 import dposlib
 import weakref
 import getpass
+import ledgerblue
 
 from collections import OrderedDict
 
+from dposlib import ldgr
 from dposlib.blockchain import slots, cfg
 from dposlib.util.asynch import setInterval
 from dposlib.util.data import loadJson, dumpJson
@@ -86,7 +88,7 @@ class Transaction(dict):
 				delattr(Transaction, attr)
 
 	@staticmethod
-	def setDynamicFee(value="avgFee"):
+	def useDynamicFee(value="avgFee"):
 		"""
 		Activate and configure dynamic fees parameters. Value can be either an
 		integer defining the fee multiplier constant or a string defining the
@@ -102,11 +104,13 @@ class Transaction(dict):
 				Transaction.FEESL = value
 		else:
 			raise Exception("Dynamic fees can not be set on %s network" % cfg.network)
+	setDynamicFee = useDynamicFee
 
 	@staticmethod
-	def setStaticFee():
+	def useStaticFee():
 		"""Activate static fees."""
 		Transaction.DFEES = False
+	setStaticFee = useStaticFee
 
 	@staticmethod
 	def load(txid):
@@ -122,6 +126,7 @@ class Transaction(dict):
 		data = dict(arg, **kwargs)
 		dict.__init__(self)
 
+		self["amount"] = data.pop("amount", 0)
 		self["type"] = data.pop("type", 0) # default type is 0 (transfer)
 		self["timestamp"] = data.pop("timestamp", slots.getTime()) # set timestamp if no one given
 		self["asset"] = data.pop("asset", {}) # put asset value if no one given
@@ -157,17 +162,19 @@ class Transaction(dict):
 				Transaction._secondPrivateKey = str(value)
 
 	def setFees(self):
+		static_value = cfg.fees.get("staticFees", cfg.fees).get(dposlib.core.TRANSACTIONS[self["type"]])
 		if Transaction.DFEES:
-			# use 30-days-average id FEESL is not None
+			# use fee statistics if FEESL is not None
 			if Transaction.FEESL != None:
-				fee = cfg.feestats[self["type"]][Transaction.FEESL]
+				# if fee statistics not found, return static fee value
+				fee = cfg.feestats.get(self["type"], {}).get(Transaction.FEESL, static_value)
 			# else compute fees using fee multiplier and tx size
 			else:
 				fee = dposlib.core.computeDynamicFees(self)
 		else:
 			# k is 0 or signature number in case of multisignature tx
 			k = len(self.get("asset", {}).get("multisignature", {}).get("keysgroup", []))
-			fee = cfg.fees.get("staticFees", cfg.fees).get(dposlib.core.TRANSACTIONS[self["type"]]) * (1+k)
+			fee = static_value * (1+k)
 		dict.__setitem__(self, "fee", fee)
 
 	def feeIncluded(self):
@@ -275,7 +282,9 @@ class Data:
 	def wallet_islinked(func):
 		def wrapper(*args, **kw):
 			obj = args[0]
-			if not hasattr(obj, "address"):
+			if hasattr(obj, "derivationPath"):
+				return func(*args, **kw)
+			elif not hasattr(obj, "address"):
 				raise Exception("not a wallet")
 			elif (obj.publicKey == None and dposlib.core.crypto.getAddress(getattr(Transaction, "_publicKey", " ")) == obj.address) or \
 			     (getattr(Transaction, "_publicKey", None) == obj.publicKey and getattr(Transaction, "_secondPublicKey", None) == obj.secondPublicKey):
@@ -323,11 +332,15 @@ class Data:
 
 	def update(self):
 		result = self.__endpoint(*self.__args, **self.__kwargs)
-		if "error" not in result:
-			self.__dict.update(**result)
+		for key in [k for k in self.__dict if k not in result]:
+			self.__dict.pop(key, False)
+		self.__dict.update(**result)
 
 	def track(self):
-		Data.REF.add(weakref.ref(self))
+		try:
+			Data.REF.add(weakref.ref(self))
+		except:
+			pass
 
 
 class Wallet(Data):
@@ -375,9 +388,9 @@ class Wallet(Data):
 
 	def setFeeLevel(self, fee_level=None):
 		if fee_level == None:
-			Transaction.setStaticFee()
+			Transaction.useStaticFee()
 		else:
-			Transaction.setDynamicFee(fee_level)
+			Transaction.useDynamicFee(fee_level)
 
 	def transactions(self, limit=50):
 		received, sent, count = [], [], 0
@@ -388,38 +401,83 @@ class Wallet(Data):
 			count = limit if count == tmpcount else tmpcount
 		return [filter_dic(dic) for dic in sorted(received+sent, key=lambda e:e.get("timestamp", None), reverse=True)[:limit]]
 
+	def finalizeTx(self, tx, fee_included=False):
+		tx.finalize(fee_included=fee_included)
+		# sys.stdout.write("%s\n" % json.dumps(tx, indent=2))
+		return tx
+
 	@Data.wallet_islinked
 	def send(self, amount, address, vendorField=None, fee_included=False):
 		tx = dposlib.core.transfer(amount, address, vendorField)
-		tx.finalize(fee_included=fee_included)
-		return broadcastTransactions(tx)
+		return broadcastTransactions(self.finalizeTx(tx, fee_included=fee_included))
 
 	@Data.wallet_islinked
 	def registerSecondSecret(self, secondSecret):
 		tx = dposlib.core.registerSecondSecret(secondSecret)
-		tx.finalize()
-		return broadcastTransactions(tx)
+		return broadcastTransactions(self.finalizeTx(tx))
 
 	@Data.wallet_islinked
 	def registerSecondPublicKey(self, secondPublicKey):
 		tx = dposlib.core.registerSecondPublicKey(secondPublicKey)
-		tx.finalize()
-		return broadcastTransactions(tx)
+		return broadcastTransactions(self.finalizeTx(tx))
 
 	@Data.wallet_islinked
 	def registerAsDelegate(self, username):
 		tx = dposlib.core.registerAsDelegate(username)
-		tx.finalize()
-		return broadcastTransactions(tx)
+		return broadcastTransactions(self.finalizeTx(tx))
 
 	@Data.wallet_islinked
 	def upVote(self, *usernames):
 		tx = dposlib.core.upVote(*usernames)
-		tx.finalize()
-		return broadcastTransactions(tx)
+		return broadcastTransactions(self.finalizeTx(tx))
 
 	@Data.wallet_islinked
 	def downVote(self, *usernames):
 		tx = dposlib.core.downVote(*usernames)
-		tx.finalize()
-		return broadcastTransactions(tx)
+		return broadcastTransactions(self.finalizeTx(tx))
+
+
+class NanoS(Wallet):
+
+	def __init__(self, network, account, index, **kw):
+		# aip20 : https://github.com/ArkEcosystem/AIPs/issues/29
+		self.derivationPath = "44'/%s'/%s'/%s'/%s" % (cfg.slip44, network, account, index)
+		self.address = dposlib.core.crypto.getAddress(ldgr.getPublicKey(ldgr.parseBip32Path(self.derivationPath)))
+		self.debug = kw.pop("debug", False)
+		Wallet.__init__(self, self.address, **kw)
+
+	@staticmethod
+	def fromDerivationPath(derivationPath, **kw):
+		nanos = NanoS(0,0,0, **kw)
+		address = dposlib.core.crypto.getAddress(ldgr.getPublicKey(ldgr.parseBip32Path(derivationPath)))
+		nanos.derivationPath = derivationPath
+		nanos._Data__kwargs["address"] = nanos.address = address
+		nanos.update()
+		return nanos
+
+	def finalizeTx(self, tx, fee_included=False):
+		tx.setFees()
+		tx.feeIncluded() if fee_included else tx.feeExcluded()
+
+		tx["senderId"] = self.address
+		if tx["type"] in [1, 3, 4] and "recipientId" not in tx:
+			tx["recipientId"] = self.address
+
+		try:
+			ldgr.signTransaction(tx, self.derivationPath, self.debug)
+		except ledgerblue.commException.CommException:
+			raise Exception("transaction cancelled")
+		
+		if self.secondPublicKey != None:
+			try:
+				keys_2 = dposlib.core.crypto.getKeys(getpass.getpass("second secret > "))
+				while keys_2.get("publicKey", None) != self.secondPublicKey:
+					keys_2 = dposlib.core.crypto.getKeys(getpass.getpass("second secret > "))
+			except KeyboardInterrupt:
+				raise Exception("transaction cancelled")
+			else:
+				tx["signSignature"] = dposlib.core.crypto.getSignature(tx, keys_2["privateKey"])
+
+		tx.identify()
+		# sys.stdout.write("%s\n" % json.dumps(tx, indent=2))
+		return tx

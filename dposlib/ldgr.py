@@ -2,7 +2,7 @@
 # © Toons
 
 """
-This module contains functions to connect with Ledger Nano S.
+This module contains functions to interoperate with Ledger Nano S.
 """
 
 import io
@@ -42,11 +42,11 @@ def parseBip32Path(path):
 
 def buildTxApdu(dongle_path, data):
 	"""
-	Generate apdu from tx data to be sent into the ledger key.
+	Generate apdu from data. This apdu is to be sent into the ledger key.
 
 	Argument:
 	dongle_path -- value returned by parseBip32Path
-	data -- value returned by arky.core.crypto.getBytes
+	data -- bytes value returned by dposlib.core.crypto.getBytes
 
 	Return bytes
 	"""
@@ -63,7 +63,7 @@ def buildTxApdu(dongle_path, data):
 		p1 = util.unhexlify("e0048040")
 
 	return [
-		p1 + util.intasb(path_len + 1 + len(data1)) + util.intasb(path_len//4) + dongle_path + data1,
+		p1 + util.intasb(1 + path_len + len(data1)) + util.intasb(path_len//4) + dongle_path + data1,
 		util.unhexlify("e0048140") + util.intasb(len(data2)) + data2 if len(data2) else None
 	]
 
@@ -105,6 +105,19 @@ def getPublicKey(dongle_path, debug=False):
 
 
 def getSignature(data, dongle_path, debug=False):
+	"""
+	Get ledger Nano S signature of given transaction.
+
+	Argument:
+	data -- transaction as bytes data returned by dposlib.core.crypto.getBytes
+	dongle_path -- value returned by parseBip32Path
+
+	Keyword argument:
+	debug -- flag to activate debug messages from ledger key [default: False]
+
+	Return str (hex)
+	"""
+
 	apdu1, apdu2 = buildTxApdu(dongle_path, data)
 	dongle = getDongle(debug)
 	result = dongle.exchange(bytes(apdu1), timeout=30)
@@ -116,7 +129,19 @@ def getSignature(data, dongle_path, debug=False):
 
 
 def signTransaction(tx, path, debug=False):
+	"""
+	Append signature into transaction according to derivation path.
+
+	Argument:
+	tx -- transaction as dictionary
+	path -- derivation path
+
+	Keyword argument:
+	debug -- flag to activate debug messages from ledger key [default: False]
+	
+	Return None
+	"""
+
 	dongle_path = parseBip32Path(path)
 	tx["senderPublicKey"] = getPublicKey(dongle_path, debug)
 	tx["signature"] = getSignature(dposlib.core.crypto.getBytes(tx), dongle_path, debug)
-	
